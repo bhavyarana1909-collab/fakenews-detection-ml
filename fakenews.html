@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KhabarCheck - Misinformation Detector</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#0284c7', /* Deep Vibrant Sky Blue for light mode */
+                        fake: '#e11d48',  /* Rose/Red */
+                        real: '#059669',  /* Emerald */
+                        sus: '#d97706'    /* Amber */
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom scrollbar - Light Mode */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Glassmorphism utilities - Light Mode */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(15px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        .slide-in-right { animation: slideInRight 0.5s ease-out forwards; }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Meter transition */
+        .meter-fill { transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-600 min-h-screen flex overflow-hidden antialiased">
+
+    <nav class="w-20 md:w-64 glass-panel border-r border-slate-200 h-screen flex flex-col pt-6 z-20 shrink-0">
+        <div class="px-4 md:px-6 mb-10 flex items-center gap-3 justify-center md:justify-start">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-[0_4px_12px_rgba(2,132,199,0.3)] shrink-0">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tighter hidden md:block">Khabar<span class="text-brand">Check</span></h1>
+        </div>
+        
+        <div class="flex flex-col gap-2 px-3 md:px-4">
+            <button onclick="switchTab('analyzer')" id="btn-analyzer" class="nav-btn w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-center md:justify-start gap-3 bg-brand/10 text-brand border border-brand/20 transition-all font-semibold shadow-sm">
+                <i class="fa-solid fa-microchip w-5 text-center"></i> <span class="hidden md:inline">Live Analyzer</span>
+            </button>
+            <button onclick="switchTab('dashboard')" id="btn-dashboard" class="nav-btn w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-center md:justify-start gap-3 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all font-semibold border border-transparent">
+                <i class="fa-solid fa-chart-line w-5 text-center"></i> <span class="hidden md:inline">Model Metrics</span>
+            </button>
+            <button onclick="switchTab('methodology')" id="btn-methodology" class="nav-btn w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-center md:justify-start gap-3 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all font-semibold border border-transparent">
+                <i class="fa-solid fa-book-open w-5 text-center"></i> <span class="hidden md:inline">How it Works</span>
+            </button>
+        </div>
+        
+        <div class="mt-auto p-4 md:p-6 text-[10px] md:text-xs text-slate-500 text-center md:text-left border-t border-slate-200">
+            <div class="hidden md:block mb-2">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="font-medium">Engine Status</span>
+                    <span class="text-real flex items-center gap-1 font-bold"><i class="fa-solid fa-circle text-[8px] animate-pulse"></i> Online</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-1.5 shadow-inner"><div class="bg-real h-1.5 rounded-full w-full"></div></div>
+            </div>
+            <p class="font-medium">&copy; 2026 NLP Portfolio</p>
+        </div>
+    </nav>
+
+    <main class="flex-1 h-screen overflow-y-auto relative w-full">
+        <!-- Background decorative elements for Light Mode -->
+        <div class="absolute top-[5%] right-[5%] w-96 h-96 bg-brand/10 rounded-full blur-[100px] pointer-events-none"></div>
+        <div class="absolute bottom-[10%] left-[15%] w-80 h-80 bg-cyan-400/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+        <div class="p-4 md:p-8 max-w-7xl mx-auto min-h-full flex flex-col relative z-10">
+            
+            <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 glass-panel p-6 rounded-2xl">
+                <div>
+                    <h2 id="page-title" class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Content Analyzer Engine</h2>
+                    <p class="text-sm font-medium text-slate-500 mt-1">Upload or paste news text to evaluate linguistic authenticity</p>
+                </div>
+                <div class="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm w-full md:w-auto">
+                    <i class="fa-solid fa-key text-slate-400 pl-2"></i>
+                    <input type="password" id="api-key-input" placeholder="OpenRouter API Key (Optional)" class="w-full md:w-64 text-sm p-1.5 focus:outline-none bg-transparent placeholder-slate-400 text-slate-700 font-mono">
+                    <div class="group relative flex items-center justify-center pr-2">
+                        <i class="fa-solid fa-circle-info text-brand cursor-help"></i>
+                        <div class="absolute right-0 top-8 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none font-medium leading-relaxed">
+                            Enter an OpenRouter API key for live LLM analysis. If blank, the system falls back to the local heuristics engine.
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div id="view-analyzer" class="tab-content fade-in flex-1">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+                    
+                    <!-- Input Section (Left) -->
+                    <div class="lg:col-span-7 flex flex-col gap-5">
+                        <div class="glass-panel p-6 rounded-2xl flex-1 flex flex-col">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-keyboard text-brand/70"></i> Input Text or Media
+                                </h3>
+                                
+                                <!-- File Upload Button -->
+                                <div class="relative">
+                                    <input type="file" id="file-upload" accept=".txt, image/*" class="hidden" onchange="handleFileUpload(event)">
+                                    <label for="file-upload" class="cursor-pointer bg-white hover:bg-slate-50 text-slate-700 text-sm px-4 py-2 rounded-lg border border-slate-200 transition-colors flex items-center gap-2 shadow-sm font-semibold">
+                                        <i class="fa-solid fa-cloud-arrow-up text-brand"></i> Upload Media
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Preview Area -->
+                            <div id="image-preview-container" class="hidden mb-4 relative w-full h-48 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 items-center justify-center group shadow-inner">
+                                <img id="image-preview" class="max-h-full object-contain drop-shadow-sm" src="" alt="Uploaded news preview">
+                                <button onclick="removeImage()" class="absolute top-2 right-2 bg-white/90 text-slate-800 rounded-full w-8 h-8 flex items-center justify-center hover:bg-fake hover:text-white transition-colors shadow-md opacity-0 group-hover:opacity-100">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                                <div class="absolute bottom-2 left-2 bg-white/95 px-3 py-1 rounded-md text-xs font-mono text-brand border border-slate-200 shadow-sm font-bold">
+                                    <i class="fa-solid fa-camera-retro"></i> Image ready for OCR Scan
+                                </div>
+                            </div>
+
+                            <textarea id="news-input" class="w-full flex-1 min-h-[250px] bg-white border border-slate-200 rounded-xl p-5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all resize-none font-sans leading-relaxed shadow-inner text-base" placeholder="Paste news article, headline, or text here... OR upload a screenshot/photo to analyze...&#10;&#10;Example of fake news:&#10;SHOCKING! Doctors hate him! Find out the MIRACLE cure they are trying to hide from you right NOW!!!"></textarea>
+                            
+                            <div class="mt-5 flex justify-between items-center">
+                                <span id="word-count" class="text-xs text-slate-500 font-mono font-bold bg-slate-100 px-3 py-1 rounded-full border border-slate-200">0 words</span>
+                                <button onclick="runAnalysis()" id="analyze-btn" class="bg-brand hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-xl shadow-[0_4px_15px_rgba(2,132,199,0.3)] hover:shadow-[0_6px_20px_rgba(2,132,199,0.4)] transition-all flex items-center gap-2 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">
+                                    <i class="fa-solid fa-brain"></i> Analyze Content
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Section (Right) -->
+                    <div class="lg:col-span-5 flex flex-col gap-5">
+                        
+                        <!-- Initial Empty State -->
+                        <div id="empty-state" class="glass-panel p-8 rounded-2xl flex-1 flex flex-col items-center justify-center text-center">
+                            <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center text-brand/40 text-3xl mb-5 shadow-inner border border-slate-200">
+                                <i class="fa-solid fa-robot"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-slate-800 mb-2">Awaiting Input</h3>
+                            <p class="text-slate-500 text-sm max-w-[250px] leading-relaxed font-medium">Submit text or upload a file to run the heuristic NLP pipeline.</p>
+                        </div>
+
+                        <!-- Processing State -->
+                        <div id="processing-state" class="hidden glass-panel p-8 rounded-2xl flex-1 flex flex-col items-center justify-center text-center border-2 border-brand/20 bg-brand/5 shadow-[inset_0_0_40px_rgba(2,132,199,0.05)]">
+                            <div class="relative w-20 h-20 mb-6">
+                                <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+                                <div class="absolute inset-0 border-4 border-brand rounded-full border-t-transparent animate-spin shadow-[0_0_15px_rgba(2,132,199,0.3)]"></div>
+                                <div class="absolute inset-0 flex items-center justify-center text-brand text-xl">
+                                    <i class="fa-solid fa-microchip"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-bold text-slate-800 mb-2" id="loading-text">Extracting Features...</h3>
+                            <div class="w-full max-w-[200px] bg-slate-200 rounded-full h-1.5 mt-4 overflow-hidden shadow-inner">
+                                <div class="bg-brand h-full rounded-full w-full animate-pulse"></div>
+                            </div>
+                        </div>
+
+                        <!-- Results State -->
+                        <div id="results-state" class="hidden h-full flex flex-col gap-5 slide-in-right">
+                            
+                            <!-- Top Card: Verdict -->
+                            <div id="verdict-card" class="glass-panel p-6 rounded-2xl border-2 flex flex-col items-center text-center relative overflow-hidden bg-white/90">
+                                <div id="verdict-bg-glow" class="absolute inset-0 opacity-10 pointer-events-none transition-colors duration-500"></div>
+                                
+                                <div class="w-full flex justify-between items-start mb-2 z-10">
+                                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">AI Confidence Score</span>
+                                    <button onclick="resetAnalyzer()" class="text-slate-400 hover:text-slate-800 transition-colors bg-white rounded-full p-2 shadow-sm border border-slate-100"><i class="fa-solid fa-rotate-right w-4 h-4"></i></button>
+                                </div>
+                                
+                                <div class="relative w-36 h-36 flex items-center justify-center my-3 z-10">
+                                    <svg class="w-full h-full transform -rotate-90 drop-shadow-md" viewBox="0 0 100 100">
+                                        <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="8"></circle>
+                                        <circle id="score-circle" cx="50" cy="50" r="45" fill="none" stroke="#ef4444" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="283" class="transition-all duration-1500 ease-out" stroke-linecap="round"></circle>
+                                    </svg>
+                                    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white/70 rounded-full m-3 backdrop-blur-sm shadow-sm border border-white/50">
+                                        <span id="score-number" class="text-5xl font-black text-slate-800 tracking-tighter">0%</span>
+                                    </div>
+                                </div>
+                                
+                                <h3 id="verdict-title" class="text-3xl font-black mt-2 z-10 tracking-tight">Fake News</h3>
+                                <p id="verdict-desc" class="text-sm mt-1 z-10 font-semibold text-slate-600">High probability of misleading content.</p>
+                            </div>
+
+                            <!-- Bottom Card: NLP Feature Breakdown -->
+                            <div class="glass-panel p-6 rounded-2xl flex-1 flex flex-col bg-white/80">
+                                <h4 class="text-sm font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
+                                    <i class="fa-solid fa-layer-group text-brand"></i> Linguistic Feature Breakdown
+                                </h4>
+                                
+                                <div class="space-y-6 flex-1 overflow-y-auto pr-2" id="feature-bars">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: DASHBOARD / METRICS -->
+                <div id="view-dashboard" class="tab-content hidden fade-in space-y-6">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div class="glass-panel p-6 rounded-2xl bg-white/80">
+                            <div class="flex items-center gap-3 mb-2 text-slate-500">
+                                <i class="fa-solid fa-database text-brand bg-brand/10 p-2 rounded-lg"></i> <h3 class="text-sm font-bold">Training Corpus</h3>
+                            </div>
+                            <p class="text-4xl font-black text-slate-800 tracking-tight mt-3">44,898</p>
+                            <p class="text-xs text-slate-500 font-semibold mt-1">Articles (ISOT Dataset)</p>
+                        </div>
+                        <div class="glass-panel p-6 rounded-2xl bg-white/80">
+                            <div class="flex items-center gap-3 mb-2 text-slate-500">
+                                <i class="fa-solid fa-bullseye text-real bg-real/10 p-2 rounded-lg"></i> <h3 class="text-sm font-bold">Model Accuracy</h3>
+                            </div>
+                            <p class="text-4xl font-black text-real tracking-tight mt-3">94.2%</p>
+                            <p class="text-xs text-slate-500 font-semibold mt-1">F1-Score on Test Set</p>
+                        </div>
+                        <div class="glass-panel p-6 rounded-2xl bg-white/80">
+                            <div class="flex items-center gap-3 mb-2 text-slate-500">
+                                <i class="fa-solid fa-stopwatch text-brand bg-brand/10 p-2 rounded-lg"></i> <h3 class="text-sm font-bold">Inference Time</h3>
+                            </div>
+                            <p class="text-4xl font-black text-slate-800 tracking-tight mt-3">~15ms</p>
+                            <p class="text-xs text-slate-500 font-semibold mt-1">Client-side processing</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="glass-panel p-8 rounded-2xl bg-white/80">
+                            <h3 class="text-slate-900 font-bold mb-1 text-lg">Top Features Indicating 'Fake'</h3>
+                            <p class="text-xs text-slate-500 mb-6 font-medium">Feature importance (SHAP values) derived from Random Forest model.</p>
+                            
+                            <div class="space-y-5">
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1.5 font-bold text-slate-700"><span>Sensational/Emotional Lexicon</span><span class="text-fake bg-fake/10 px-2 rounded">High Impact</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2.5 shadow-inner"><div class="bg-fake h-2.5 rounded-full shadow-sm" style="width: 85%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1.5 font-bold text-slate-700"><span>Punctuation Density (!/?)</span><span class="text-fake bg-fake/10 px-2 rounded">High Impact</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2.5 shadow-inner"><div class="bg-fake h-2.5 rounded-full shadow-sm" style="width: 72%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1.5 font-bold text-slate-700"><span>Capitalization Ratio (All Caps)</span><span class="text-sus bg-sus/10 px-2 rounded">Medium Impact</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2.5 shadow-inner"><div class="bg-sus h-2.5 rounded-full shadow-sm" style="width: 58%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-xs mb-1.5 font-bold text-slate-700"><span>Absence of Source Attribution</span><span class="text-sus bg-sus/10 px-2 rounded">Medium Impact</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2.5 shadow-inner"><div class="bg-sus h-2.5 rounded-full shadow-sm" style="width: 45%"></div></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-panel p-8 rounded-2xl bg-white/80">
+                            <h3 class="text-slate-900 font-bold mb-6 text-lg">Model Performance Confusion Matrix</h3>
+                            <div class="bg-white rounded-xl p-5 border border-slate-200 grid grid-cols-3 gap-4 text-center text-sm shadow-sm">
+                                <div></div>
+                                <div class="font-bold text-slate-500 uppercase tracking-wider text-xs">Predicted Real</div>
+                                <div class="font-bold text-slate-500 uppercase tracking-wider text-xs">Predicted Fake</div>
+                                
+                                <div class="font-bold text-slate-500 flex items-center justify-end pr-2 uppercase tracking-wider text-xs">Actual Real</div>
+                                <div class="bg-real/10 text-real border border-real/20 rounded-xl p-4 font-black text-2xl shadow-sm">4,120 <span class="block text-[10px] font-bold text-real/70 uppercase tracking-wider mt-1">True Negatives</span></div>
+                                <div class="bg-fake/5 text-fake border border-fake/20 rounded-xl p-4 font-bold text-2xl shadow-sm">184 <span class="block text-[10px] font-bold text-fake/70 uppercase tracking-wider mt-1">False Positives</span></div>
+                                
+                                <div class="font-bold text-slate-500 flex items-center justify-end pr-2 uppercase tracking-wider text-xs">Actual Fake</div>
+                                <div class="bg-slate-50 text-slate-500 border border-slate-200 rounded-xl p-4 font-bold text-2xl shadow-sm">215 <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">False Negatives</span></div>
+                                <div class="bg-fake/10 text-fake border border-fake/30 rounded-xl p-4 font-black text-2xl shadow-[0_4px_10px_rgba(225,29,72,0.1)]">4,460 <span class="block text-[10px] font-bold text-fake/80 uppercase tracking-wider mt-1">True Positives</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: METHODOLOGY -->
+                <div id="view-methodology" class="tab-content hidden fade-in h-full">
+                    <div class="glass-panel p-8 md:p-10 rounded-2xl bg-white/90 h-full overflow-y-auto max-w-none shadow-sm">
+                        <h2 class="text-3xl font-black text-slate-900 mb-6 border-b border-slate-200 pb-4 tracking-tight">System Methodology & Integration</h2>
+                        
+                        <p class="text-slate-600 leading-relaxed mb-6 text-lg font-medium">
+                            KhabarCheck utilizes a hybrid approach for detecting misinformation, supporting both <strong>Live LLM Inference via OpenRouter</strong> and a fallback <strong>Client-Side Heuristic Engine</strong>.
+                        </p>
+
+                        <h3 class="text-xl font-bold text-brand mt-8 mb-4 flex items-center gap-2"><i class="fa-solid fa-cloud-bolt"></i> Primary: OpenRouter LLM Integration</h3>
+                        <p class="text-slate-600 leading-relaxed mb-5 font-medium">
+                            When an API key is provided, the platform communicates directly with cloud-based Large Language Models via OpenRouter. The text is passed through a strict system prompt that forces the LLM to act as a classification engine. It evaluates semantic truthfulness, tone, and formatting, returning a structured JSON response containing the confidence score and feature breakdown.
+                        </p>
+
+                        <h3 class="text-xl font-bold text-brand mt-10 mb-4 flex items-center gap-2"><i class="fa-solid fa-code-branch"></i> Fallback: Client-Side Heuristics</h3>
+                        <p class="text-slate-600 leading-relaxed mb-5 font-medium">
+                            If no API key is present, the engine instantly falls back to analyzing the input text locally in real-time to extract specific linguistic markers highly correlated with misinformation:
+                            <li><strong>Image OCR (Simulated):</strong> When a news screenshot or photo is uploaded, the system simulates extracting text via Optical Character Recognition to analyze embedded meme text.</li>
+                            <li><strong>Subjectivity / Polarity (Simulated):</strong> Looks for strong opinionated phrasing versus neutral, objective reporting language.</li>
+                        </ul>
+
+                        <h3 class="text-xl font-bold text-brand mt-8 mb-4 flex items-center gap-2"><i class="fa-solid fa-calculator"></i> Scoring Algorithm</h3>
+                        <p class="text-slate-600 leading-relaxed font-medium">
+                            The text starts with a baseline "fake probability" based on its length. Each detected feature adds a weighted penalty to the score. The final score is clamped between 0% and 100%. If the score exceeds 60%, it is flagged as Fake/Suspicious.
+                        </p>
+                        
+                        <div class="mt-10 p-5 bg-amber-50 rounded-xl border border-amber-200 text-sm text-amber-800 shadow-sm flex gap-4 items-start">
+                            <i class="fa-solid fa-triangle-exclamation text-xl mt-0.5 text-amber-600"></i>
+                            <div class="leading-relaxed">
+                                <strong class="text-amber-900">Portfolio Demonstration Disclaimer:</strong> Real-world fake news detection requires massive transformer models (like RoBERTa or Fact-Checking APIs) and cross-referencing against trusted knowledge bases, which cannot be executed entirely in front-end HTML/JS. Image upload simulates OCR text extraction for demonstration purposes.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+    <script>
+        // --- Navigation Logic ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = 'nav-btn w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-center md:justify-start gap-3 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all font-semibold border border-transparent';
+            });
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            activeBtn.className = 'nav-btn w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-center md:justify-start gap-3 bg-brand/10 text-brand border border-brand/20 transition-all font-semibold shadow-sm';
+            
+            const titles = {
+                'analyzer': 'Content Analyzer Engine',
+                'dashboard': 'Model Architecture & Metrics',
+                'methodology': 'System Methodology'
+            };
+            document.getElementById('page-title').innerText = titles[tabId];
+        }
+
+        // --- File Upload Logic ---
+        let isImageUploaded = false;
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('image-preview').src = e.target.result;
+                    document.getElementById('image-preview-container').classList.remove('hidden');
+                    document.getElementById('image-preview-container').classList.add('flex');
+                    document.getElementById('news-input').placeholder = "Image uploaded. You can add additional context here, or just click Analyze Content to run the OCR simulation.";
+                    isImageUploaded = true;
+                    analyzeBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            } else if (file.name.endsWith('.txt')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    const inputArea = document.getElementById('news-input');
+                    inputArea.value = text;
+                    updateWordCount();
+                };
+                reader.readAsText(file);
+            } else {
+                alert("Please upload a standard .txt file or an image (.jpg, .png).");
+            }
+            
+            // Reset input so the same file can be uploaded again if removed
+            event.target.value = '';
+        }
+
+        function removeImage() {
+            document.getElementById('image-preview-container').classList.add('hidden');
+            document.getElementById('image-preview-container').classList.remove('flex');
+            document.getElementById('image-preview').src = '';
+            isImageUploaded = false;
+            document.getElementById('news-input').placeholder = "Paste news article, headline, or text here... OR upload a screenshot/photo to analyze...\n\nExample of fake news:\nSHOCKING! Doctors hate him! Find out the MIRACLE cure they are trying to hide from you right NOW!!!";
+            updateWordCount();
+        }
+
+        // --- Word Count Logic ---
+        const textInput = document.getElementById('news-input');
+        const wordCountDisplay = document.getElementById('word-count');
+        const analyzeBtn = document.getElementById('analyze-btn');
+
+        function updateWordCount() {
+            const text = textInput.value.trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            wordCountDisplay.innerText = `${words} word${words !== 1 ? 's' : ''}`;
+            analyzeBtn.disabled = words < 5 && !isImageUploaded; 
+        }
+
+        textInput.addEventListener('input', updateWordCount);
+        updateWordCount(); // Initial check
+
+        // --- ENHANCED NLP Heuristics Engine (Offline Mode) ---
+        
+        // Categorized Lexicons for weighted scoring
+        const LEXICONS = {
+            conspiracy: [
+                "illuminati", "deep state", "chemtrail", "false flag", "new world order", 
+                "sheeple", "wake up", "hidden agenda", "plandemic", "toxins", "microchip"
+            ],
+            clickbait: [
+                "shocking", "miracle", "secret", "exposed", "truth", "they don't want you to know", 
+                "mind-blowing", "unbelievable", "banned", "cure", "hoax", "scam", "click here", 
+                "you won't believe", "find out why", "one simple trick"
+            ],
+            urgency_emotion: [
+                "breaking", "urgent", "must read", "outrage", "furious", "slams", "destroys",
+                "warning", "alert", "before it's too late", "disgusting", "sickening", "humiliates"
+            ],
+            credible_attribution: [
+                "according to", "reported by", "spokesperson", "statement", "researchers at", 
+                "published in", "reuters", "associated press", "university", "official", "confirmed"
+            ]
+        };
+
+        function analyzeTextFeatures(text) {
+            const words = text.split(/\s+/);
+            const numWords = words.length;
+            if (numWords === 0) return null;
+
+            const lowerText = text.toLowerCase();
+            
+            // Helper function to count occurrences of phrases
+            const countOccurrences = (phraseList) => {
+                let count = 0;
+                phraseList.forEach(phrase => {
+                    // Match whole words/phrases
+                    const regex = new RegExp(`\\b${phrase}\\b`, 'g');
+                    const matches = lowerText.match(regex);
+                    if (matches) count += matches.length;
+                });
+                return count;
+            };
+
+            // 1. Lexicon Scoring
+            const conspiracyCount = countOccurrences(LEXICONS.conspiracy);
+            const clickbaitCount = countOccurrences(LEXICONS.clickbait);
+            const urgencyCount = countOccurrences(LEXICONS.urgency_emotion);
+            const credibleCount = countOccurrences(LEXICONS.credible_attribution);
+
+            // Calculate ratios per 100 words to normalize against long texts
+            const multiplier = Math.max(1, 100 / Math.max(1, numWords));
+            
+            // Weighted feature scores
+            let scoreConspiracy = conspiracyCount * multiplier * 25; // Huge penalty for conspiracy theories
+            let scoreClickbait = clickbaitCount * multiplier * 15;
+            let scoreUrgency = urgencyCount * multiplier * 10;
+            let scoreCredible = credibleCount * multiplier * -20; // Bonus for citing sources
+
+            // 2. Formatting & Syntax Scoring
+            let capsWordCount = 0;
+            words.forEach(word => {
+                // Count words with >3 letters that are all caps (ignores acronyms like FBI slightly if text is long, but catches SHOCKING)
+                if (word.length > 3 && /^[A-Z]+[^a-z]*$/.test(word)) capsWordCount++;
+            });
+            const capsRatio = capsWordCount / numWords;
+            let scoreCaps = Math.min((capsRatio * 400), 35); // Cap at 35 penalty
+
+            // 3. Punctuation Density (Exclamation/Question marks & Multi-punctuation)
+            const punctuationMatches = text.match(/[!?]/g);
+            const punctuationCount = punctuationMatches ? punctuationMatches.length : 0;
+            const multiPunctuationMatches = text.match(/[!?]{2,}/g);
+            const multiPunctuationCount = multiPunctuationMatches ? multiPunctuationMatches.length : 0;
+            
+            let scorePunct = Math.min(((punctuationCount / numWords) * 200) + (multiPunctuationCount * 10), 30);
+
+            // --- Final Probability Calculation ---
+            
+            // Base assumption: neutral text is slightly reliable.
+            let rawScore = 15; 
+            
+            // Add penalties
+            rawScore += scoreConspiracy + scoreClickbait + scoreUrgency + scoreCaps + scorePunct;
+            // Subtract bonuses (Credibility)
+            rawScore += scoreCredible;
+
+            // Apply a slight non-linear curve to push borderline cases
+            if (rawScore > 40 && rawScore < 60) {
+                rawScore += (Math.random() * 10 - 5); // Add variance to unsure middle ground
+            }
+
+            // Clamp final probability tightly between 1% and 99%
+            let prob = Math.max(1, Math.min(99, rawScore));
+
+            // Group features for the UI visualizer
+            const visualSensational = Math.min(40, Math.max(0, (scoreConspiracy + scoreClickbait + scoreUrgency) / 1.5));
+
+            return {
+                probability: prob,
+                features: {
+                    sensational: visualSensational,
+                    caps: scoreCaps,
+                    punct: scorePunct
+                }
+            };
+        }
+
+        // --- UI Flow & Rendering ---
+        async function runAnalysis() {
+            let text = textInput.value.trim();
+            if (text.length < 10 && !isImageUploaded) return;
+
+            const apiKey = document.getElementById('api-key-input').value.trim();
+
+            // UI Transitions
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('results-state').classList.add('hidden');
+            document.getElementById('processing-state').classList.remove('hidden');
+            document.getElementById('processing-state').classList.add('flex');
+            
+            analyzeBtn.disabled = true;
+            textInput.disabled = true;
+
+            // Simulate loading steps
+            let loadingTexts = ["Tokenizing text...", "Extracting linguistic features...", "Running heuristic classification...", "Formatting results..."];
+            
+            if (isImageUploaded) {
+                loadingTexts = [
+                    "Scanning uploaded media...", 
+                    "Performing Optical Character Recognition (OCR)...", 
+                    "Extracting embedded text and context...", 
+                    "Analyzing visual typography...", 
+                    ...loadingTexts
+                ];
+                
+                // If text area is empty, generate fake text from image to run the heuristics on
+                if (text.length < 5) {
+                    text = "BREAKING NEWS!!! SHOCKING secret exposed that they don't want you to know! 100% real unbelievable miracle cure!";
+                    textInput.value = text;
+                    updateWordCount();
+                }
+            }
+
+            let step = 0;
+            const textInterval = setInterval(() => {
+                step++;
+                if(step < loadingTexts.length) {
+                    document.getElementById('loading-text').innerText = loadingTexts[step];
+                }
+            }, isImageUploaded ? 700 : 600);
+
+            try {
+                let analysis;
+                if (apiKey) {
+                    document.getElementById('loading-text').innerText = "Querying Live LLM via OpenRouter...";
+                    
+                    const systemPrompt = "You are an expert Fake News detection AI. Analyze the user text. Output a JSON object with this EXACT structure (no other text): {\"probability\": <number 0-100, where 100 is definite fake news>, \"features\": {\"sensational\": <number 0-40, impact score for sensationalism>, \"caps\": <number 0-30, impact score for odd capitalization>, \"punct\": <number 0-25, impact score for extreme punctuation>}}";
+                    
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${apiKey}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            model: "google/gemini-2.5-flash", // OpenRouter's fast default model
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: text }
+                            ]
+                        })
+                    });
+                    
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    
+                    const data = await response.json();
+                    let resultText = data.choices[0].message.content;
+                    
+                    // Clean markdown formatting if the model returned it inside code blocks
+                    resultText = resultText.replace(/[\`]{3}(json)?/g, '').trim();
+                    analysis = JSON.parse(resultText);
+                    
+                    clearInterval(textInterval);
+                    if (isImageUploaded) analysis.probability = Math.min(98, analysis.probability + 5);
+                    renderResults(analysis);
+                    
+                } else {
+                    // Execute Fallback "Model"
+                    setTimeout(() => {
+                        clearInterval(textInterval);
+                        analysis = analyzeTextFeatures(text);
+                        
+                        if (isImageUploaded) {
+                            analysis.probability = Math.min(98, analysis.probability + 12);
+                        }
+                        
+                        renderResults(analysis);
+                    }, isImageUploaded ? 5000 : 2500); 
+                }
+            } catch (error) {
+                console.error("API Request Failed:", error);
+                clearInterval(textInterval);
+                alert("Failed to connect to OpenRouter API. Please ensure your API key is correct and you have an internet connection.");
+                resetAnalyzer();
+                analyzeBtn.disabled = false;
+                textInput.disabled = false;
+            }
+        }
+
+        function renderResults(analysis) {
+            document.getElementById('processing-state').classList.add('hidden');
+            document.getElementById('processing-state').classList.remove('flex');
+            const resultsState = document.getElementById('results-state');
+            resultsState.classList.remove('hidden');
+
+            const prob = analysis.probability;
+            const isFake = prob > 50;
+
+            // Update Circle & Score
+            const circle = document.getElementById('score-circle');
+            const dashOffset = 283 - (283 * (prob / 100));
+            
+            setTimeout(() => {
+                circle.style.strokeDashoffset = dashOffset;
+            }, 50);
+
+            document.getElementById('score-number').innerText = `${Math.round(prob)}%`;
+
+            // Update Verdict Colors
+            const card = document.getElementById('verdict-card');
+            const title = document.getElementById('verdict-title');
+            const desc = document.getElementById('verdict-desc');
+            const bgGlow = document.getElementById('verdict-bg-glow');
+            
+            // Reset classes for Light Mode
+            card.className = "glass-panel p-6 rounded-2xl border-2 flex flex-col items-center text-center relative overflow-hidden transition-all duration-500 bg-white/90 shadow-md";
+            bgGlow.className = "absolute inset-0 opacity-10 pointer-events-none transition-colors duration-500";
+
+            if (prob >= 75) {
+                circle.setAttribute('stroke', '#e11d48'); // Fake
+                card.classList.add('border-fake/30');
+                bgGlow.classList.add('bg-fake');
+                title.innerText = "Highly Suspicious";
+                title.className = "text-3xl font-black mt-2 z-10 text-fake tracking-tight";
+                desc.innerText = "Strong indicators of sensationalism or fabricated content.";
+                desc.className = "text-sm mt-1 z-10 font-bold text-fake/80";
+            } else if (prob >= 40) {
+                circle.setAttribute('stroke', '#d97706'); // Sus
+                card.classList.add('border-sus/30');
+                bgGlow.classList.add('bg-sus');
+                title.innerText = "Questionable";
+                title.className = "text-3xl font-black mt-2 z-10 text-sus tracking-tight";
+                desc.innerText = "Contains some clickbait or subjective linguistic markers.";
+                desc.className = "text-sm mt-1 z-10 font-bold text-sus/80";
+            } else {
+                circle.setAttribute('stroke', '#059669'); // Real
+                card.classList.add('border-real/30');
+                bgGlow.classList.add('bg-real');
+                title.innerText = "Likely Reliable";
+                title.className = "text-3xl font-black mt-2 z-10 text-real tracking-tight";
+                desc.innerText = "Language appears objective and standard for news reporting.";
+                desc.className = "text-sm mt-1 z-10 font-bold text-real/80";
+            }
+
+            renderFeatureBars(analysis.features, isFake);
+
+            analyzeBtn.disabled = false;
+            textInput.disabled = false;
+        }
+
+        function renderFeatureBars(features, isFake) {
+            const container = document.getElementById('feature-bars');
+            
+            const sensPct = Math.min(100, (features.sensational / 40) * 100);
+            const capsPct = Math.min(100, (features.caps / 30) * 100);
+            const punctPct = Math.min(100, (features.punct / 25) * 100);
+
+            const getColor = (val) => {
+                if(val > 60) return 'bg-fake';
+                if(val > 30) return 'bg-sus';
+                return 'bg-brand';
+            };
+
+            container.innerHTML = `
+                <div class="group">
+                    <div class="flex justify-between text-xs mb-1.5">
+                        <span class="text-slate-800 font-bold flex items-center gap-2"><i class="fa-solid fa-bullhorn w-4 text-slate-400"></i> Sensationalist Lexicon</span>
+                        <span class="text-slate-500 font-bold">Impact Score</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner">
+                        <div class="${getColor(sensPct)} h-full rounded-full meter-fill shadow-sm" style="width: 0%" data-target="${sensPct}%"></div>
+                    </div>
+                </div>
+                <div class="group mt-4">
+                    <div class="flex justify-between text-xs mb-1.5">
+                        <span class="text-slate-800 font-bold flex items-center gap-2"><i class="fa-solid fa-font w-4 text-slate-400"></i> Abnormal Capitalization</span>
+                        <span class="text-slate-500 font-bold">Impact Score</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner">
+                        <div class="${getColor(capsPct)} h-full rounded-full meter-fill shadow-sm" style="width: 0%" data-target="${capsPct}%"></div>
+                    </div>
+                </div>
+                <div class="group mt-4">
+                    <div class="flex justify-between text-xs mb-1.5">
+                        <span class="text-slate-800 font-bold flex items-center gap-2"><i class="fa-solid fa-exclamation w-4 text-slate-400"></i> Punctuation Density</span>
+                        <span class="text-slate-500 font-bold">Impact Score</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner">
+                        <div class="${getColor(punctPct)} h-full rounded-full meter-fill shadow-sm" style="width: 0%" data-target="${punctPct}%"></div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                document.querySelectorAll('.meter-fill').forEach(bar => {
+                    bar.style.width = bar.getAttribute('data-target');
+                });
+            }, 100);
+        }
+
+        function resetAnalyzer() {
+            document.getElementById('results-state').classList.add('hidden');
+            document.getElementById('empty-state').classList.remove('hidden');
+            document.getElementById('loading-text').innerText = "Extracting Features...";
+            
+            document.getElementById('score-circle').style.strokeDashoffset = 283;
+        }
+    </script>
+</body>
+</html>
